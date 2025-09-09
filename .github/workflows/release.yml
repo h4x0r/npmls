@@ -1,0 +1,131 @@
+name: Release Builds
+
+on:
+  release:
+    types: [created]
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          # Windows
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            suffix: .exe
+            archive: zip
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1.0.7
+      with:
+        toolchain: stable
+        target: ${{ matrix.target }}
+        override: true
+        profile: minimal
+
+
+    - name: Cache cargo dependencies
+      uses: actions/cache@2f8e54208210a422b2efd51efaa6bd6d7ca8920f # v3.4.3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-${{ matrix.target }}-
+          ${{ runner.os }}-cargo-
+
+    - name: Build release binary
+      uses: actions-rs/cargo@844f36862e911db73fe0815f00a4a2602c279505 # v1.0.3
+      with:
+        command: build
+        args: --release --target ${{ matrix.target }}
+
+    - name: Create binary name
+      shell: bash
+      run: |
+        if [[ "${{ matrix.target }}" == *"windows"* ]]; then
+          echo "BINARY_NAME=npmls.exe" >> $GITHUB_ENV
+          echo "BINARY_PATH=target/${{ matrix.target }}/release/npmls.exe" >> $GITHUB_ENV
+        else
+          echo "BINARY_NAME=npmls" >> $GITHUB_ENV
+          echo "BINARY_PATH=target/${{ matrix.target }}/release/npmls" >> $GITHUB_ENV
+        fi
+        
+        # Create archive name
+        if [[ "${{ matrix.archive }}" == "zip" ]]; then
+          echo "ARCHIVE_NAME=npmls-${{ github.ref_name }}-${{ matrix.target }}.zip" >> $GITHUB_ENV
+        fi
+
+    - name: Create zip archive (Windows)
+      if: matrix.archive == 'zip'
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Name "release" -Force
+        Copy-Item "${{ env.BINARY_PATH }}" "release/npmls.exe"
+        if (Test-Path "README.md") { Copy-Item "README.md" "release/" }
+        if (Test-Path "LICENSE*") { Copy-Item "LICENSE*" "release/" }
+        Compress-Archive -Path "release/*" -DestinationPath "${{ env.ARCHIVE_NAME }}"
+        Remove-Item -Recurse -Force "release"
+
+    - name: Upload release asset
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ${{ env.ARCHIVE_NAME }}
+        asset_name: ${{ env.ARCHIVE_NAME }}
+        asset_content_type: application/octet-stream
+
+    - name: Upload artifact (for non-release builds)
+      if: github.event_name != 'release'
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: ${{ env.ARCHIVE_NAME }}
+        path: ${{ env.ARCHIVE_NAME }}
+        retention-days: 30
+
+  create-checksums:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+      
+    - name: Create checksums
+      run: |
+        echo "# NPM Security Scanner Release Checksums" > CHECKSUMS.txt
+        echo "Release: ${{ github.ref_name }}" >> CHECKSUMS.txt
+        echo "Date: $(date -u)" >> CHECKSUMS.txt
+        echo "" >> CHECKSUMS.txt
+        
+        for file in npmls-*; do
+          if [ -f "$file" ]; then
+            echo "## $file" >> CHECKSUMS.txt
+            sha256sum "$file" >> CHECKSUMS.txt
+            echo "" >> CHECKSUMS.txt
+          fi
+        done
+        
+    - name: Upload checksums
+      uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: CHECKSUMS.txt
+        asset_name: CHECKSUMS.txt
+        asset_content_type: text/plain

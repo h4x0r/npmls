@@ -1,0 +1,66 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo
+Cargo.lock
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Log files
+*.log
+
+# Cache and temporary files
+.cache/
+*.tmp
+*.temp
+
+# Project specific
+# Vulnerability database cache (let users build their own)
+vulnerability_db.json
+
+# Test coverage
+tarpaulin-report.html
+cobertura.xml
+
+# Profiling data
+*.profraw
+perf.data*
+
+# Backup files
+*.bak
+*.backup
+
+# Editor specific
+*~
+.*.sw?
+.vimrc.local
+
+# Local configuration
+.npmls/
+
+# Documentation build
+/docs/book/
+
+# Windows specific
+*.exe

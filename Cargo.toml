@@ -1,0 +1,71 @@
+[package]
+name = "npmls"
+version = "0.1.0"
+edition = "2021"
+description = "Fast cross-platform scanner for npm modules and malicious packages"
+authors = ["Albert Hui <albert@securityronin.com>"]
+license = "MIT"
+repository = "https://github.com/h4x0r/npmls"
+homepage = "https://github.com/h4x0r/npmls"
+keywords = ["npm", "security", "scanner", "malware", "packages"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "npmls"
+path = "src/main.rs"
+
+[dependencies]
+# Core async runtime
+tokio = { version = "1.35", features = ["full"] }
+
+# JSON parsing
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Command line interface
+clap = { version = "4.4", features = ["derive"] }
+
+# Cross-platform filesystem operations
+walkdir = "2.4"
+ignore = "0.4"
+
+# Directory traversal and cross-platform utilities  
+dirs = "5.0"
+num_cpus = "1.16"
+
+# Terminal output formatting
+colored = "2.1"
+indicatif = "0.17"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Regex for pattern matching
+regex = "1.10"
+
+# Parallel processing
+rayon = "1.8"
+
+# Terminal size detection
+term_size = "0.3"
+
+# Date/time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# HTTP client for threat intelligence
+reqwest = { version = "0.11", features = ["json", "stream"] }
+futures = "0.3"
+zip = "0.6"
+
+# Windows-specific dependencies
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["fileapi", "winnt", "processthreadsapi"] }
+ntapi = "0.4"
+
+# macOS/Linux specific dependencies  
+[target.'cfg(not(windows))'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3.8"
