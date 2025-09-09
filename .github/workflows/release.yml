@@ -7,6 +7,10 @@ on:
     tags:
       - 'v*.*.*'
 
+permissions:
+  contents: write
+  packages: read
+
 jobs:
   build:
     name: Build ${{ matrix.target }}
