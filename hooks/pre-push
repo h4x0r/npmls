@@ -1,0 +1,121 @@
+#!/bin/bash
+
+# Pre-push hook for npmls
+# Runs code quality and security checks before allowing push
+
+set -e
+
+echo "🔍 Running pre-push checks..."
+
+# Color codes for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Function to print status messages
+print_status() {
+    echo -e "${BLUE}➤${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}✓${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}⚠${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}✗${NC} $1"
+}
+
+# Check if cargo is available
+if ! command -v cargo &> /dev/null; then
+    print_error "cargo is not installed or not in PATH"
+    exit 1
+fi
+
+echo ""
+print_status "1/4 Checking code formatting with cargo fmt..."
+if ! cargo fmt --check &> /dev/null; then
+    print_error "Code is not properly formatted!"
+    echo ""
+    echo "Please run: cargo fmt"
+    echo "Or to see what needs to be fixed: cargo fmt --check"
+    exit 1
+fi
+print_success "Code formatting is correct"
+
+echo ""
+print_status "2/7 Running cargo clippy for linting..."
+if ! cargo clippy --all-targets --all-features -- -D warnings -A dead_code -A unused_imports -A clippy::unnecessary-filter-map -A clippy::upper-case-acronyms &> /dev/null; then
+    print_error "Clippy found serious issues!"
+    echo ""
+    echo "Please fix clippy errors by running: cargo clippy --fix"
+    echo "Or see details with: cargo clippy --all-targets --all-features"
+    exit 1
+fi
+print_success "No serious clippy errors found"
+
+echo ""
+print_status "3/6 Running cargo test..."
+if ! cargo test --quiet &> /dev/null; then
+    print_error "Tests are failing!"
+    echo ""
+    echo "Please fix failing tests by running: cargo test"
+    exit 1
+fi
+print_success "All tests pass"
+
+echo ""
+print_status "4/6 Checking for secrets and sensitive data..."
+# Check for common secret patterns (excluding false positives)
+if git diff --cached --name-only | xargs grep -l -E "(password\s*=|secret\s*=|api_key\s*=|token\s*=|private_key|ssh_key)" 2>/dev/null | head -1 > /dev/null; then
+    print_warning "Potential secrets detected in staged files!"
+    echo "Files containing sensitive keywords:"
+    git diff --cached --name-only | xargs grep -l -E "(password|secret|key|token|api_key)" 2>/dev/null || true
+    echo ""
+    echo "Please review these files manually before pushing."
+    echo "Press Enter to continue or Ctrl+C to abort:"
+    read -r
+fi
+print_success "No obvious secrets detected"
+
+echo ""
+print_status "5/6 Running cargo-deny for dependency analysis..."
+if command -v cargo-deny &> /dev/null; then
+    if ! cargo deny check &> /dev/null; then
+        print_error "cargo-deny found issues!"
+        echo ""
+        echo "Please review issues by running: cargo deny check"
+        exit 1
+    fi
+    print_success "No dependency issues found by cargo-deny"
+else
+    print_warning "cargo-deny not found, skipping dependency check"
+    echo "  Install with: cargo install --locked cargo-deny"
+fi
+
+echo ""
+print_status "6/6 Running cargo audit for security vulnerabilities..."
+if command -v cargo-audit &> /dev/null; then
+    if ! cargo audit --quiet &> /dev/null; then
+        print_error "cargo-audit found security vulnerabilities!"
+        echo ""
+        echo "Please review vulnerabilities by running: cargo audit"
+        echo "Or fix automatically with: cargo audit fix"
+        exit 1
+    fi
+    print_success "No security vulnerabilities found by cargo-audit"
+else
+    print_warning "cargo-audit not found, skipping vulnerability check"
+    echo "  Install with: cargo install cargo-audit"
+fi
+
+echo ""
+print_success "All pre-push checks passed! 🚀"
+echo ""
+
+exit 0
