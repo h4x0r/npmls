@@ -48,7 +48,7 @@ regex = "1.10"
 rayon = "1.8"
 
 # Terminal size detection
-term_size = "0.3"
+terminal_size = "0.3"
 
 # Date/time handling
 chrono = { version = "0.4", features = ["serde"] }

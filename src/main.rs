@@ -228,8 +228,8 @@ async fn main() -> anyhow::Result<()> {
 
                     if !final_description.is_empty() {
                         // Word wrap description to fit terminal width
-                        let terminal_width =
-                            term_size::dimensions().map_or(120, |(w, _)| w.max(80));
+                        let terminal_width = terminal_size::terminal_size()
+                            .map_or(120, |(terminal_size::Width(w), _)| (w as usize).max(80));
                         let desc_width = terminal_width.saturating_sub(5); // Account for indent
 
                         let words: Vec<&str> = final_description.split_whitespace().collect();

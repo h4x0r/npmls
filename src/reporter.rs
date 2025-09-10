@@ -79,12 +79,17 @@ impl Reporter {
         output.push_str(&format!(
             "{}\n\n",
             "─"
-                .repeat(term_size::dimensions().map_or(120, |(w, _)| w.max(80)))
+                .repeat(
+                    terminal_size::terminal_size()
+                        .map_or(120, |(terminal_size::Width(w), _)| (w as usize).max(80))
+                )
                 .dimmed()
         ));
 
         // Calculate column widths
-        let terminal_width = term_size::dimensions().map_or(120, |(w, _)| w.max(80));
+        let terminal_width = terminal_size::terminal_size()
+            .map_or(120, |(terminal_size::Width(w), _)| w as usize)
+            .max(80);
         let package_width = 25;
         let version_width = 12;
         let status_width = 12;
@@ -110,7 +115,11 @@ impl Reporter {
         output.push_str(&format!(
             "{}\n",
             "─"
-                .repeat(term_size::dimensions().map_or(120, |(w, _)| w.max(80)))
+                .repeat(
+                    terminal_size::terminal_size()
+                        .map_or(120, |(terminal_size::Width(w), _)| w as usize)
+                        .max(80)
+                )
                 .dimmed()
         ));
 
@@ -165,7 +174,10 @@ impl Reporter {
         output.push_str(&format!(
             "\n{}\n",
             "─"
-                .repeat(term_size::dimensions().map_or(120, |(w, _)| w.max(80)))
+                .repeat(
+                    terminal_size::terminal_size()
+                        .map_or(120, |(terminal_size::Width(w), _)| (w as usize).max(80))
+                )
                 .dimmed()
         ));
 
