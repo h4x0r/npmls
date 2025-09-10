@@ -1,4 +1,4 @@
-name: Security Audit
+name: Security & Dependency Audit
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
 
 jobs:
   audit:
-    name: Security Audit
+    name: Security & Dependency Audit  
     runs-on: ubuntu-latest
     
     steps:
@@ -20,11 +20,11 @@ jobs:
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
     
-    - name: Install cargo-audit
-      run: cargo install cargo-audit
+    - name: Install cargo-deny
+      run: cargo install --locked cargo-deny
     
-    - name: Run cargo audit
-      run: cargo audit
-    
-    - name: Run cargo audit for vulnerabilities
-      run: cargo audit --deny warnings
+    - name: Run comprehensive dependency audit
+      run: cargo deny check
+      
+    - name: Run security vulnerability check only
+      run: cargo deny check advisories
