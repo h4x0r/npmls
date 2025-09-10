@@ -2,8 +2,6 @@
 
 [![Crates.io](https://img.shields.io/crates/v/npmls.svg)](https://crates.io/crates/npmls)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Build Status](https://github.com/h4x0r/npmls/workflows/CI/badge.svg)](https://github.com/h4x0r/npmls/actions)
-[![Security Audit](https://github.com/h4x0r/npmls/workflows/Security%20Audit/badge.svg)](https://github.com/h4x0r/npmls/actions)
 [![Downloads](https://img.shields.io/crates/d/npmls.svg)](https://crates.io/crates/npmls)
 [![GitHub Stars](https://img.shields.io/github/stars/h4x0r/npmls.svg?style=social&label=Star)](https://github.com/h4x0r/npmls)
 
