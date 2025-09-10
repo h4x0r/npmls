@@ -76,7 +76,12 @@ impl Reporter {
             "\n{}\n",
             "📦 NPM Package Security Scan Results".bright_cyan().bold()
         ));
-        output.push_str(&format!("{}\n\n", "─".repeat(term_size::dimensions().map_or(120, |(w, _)| w.max(80))).dimmed()));
+        output.push_str(&format!(
+            "{}\n\n",
+            "─"
+                .repeat(term_size::dimensions().map_or(120, |(w, _)| w.max(80)))
+                .dimmed()
+        ));
 
         // Calculate column widths
         let terminal_width = term_size::dimensions().map_or(120, |(w, _)| w.max(80));
@@ -102,7 +107,12 @@ impl Reporter {
             status_width = status_width,
             threat_width = threat_width
         ));
-        output.push_str(&format!("{}\n", "─".repeat(term_size::dimensions().map_or(120, |(w, _)| w.max(80))).dimmed()));
+        output.push_str(&format!(
+            "{}\n",
+            "─"
+                .repeat(term_size::dimensions().map_or(120, |(w, _)| w.max(80)))
+                .dimmed()
+        ));
 
         // Table rows
         for result in results {
@@ -152,7 +162,12 @@ impl Reporter {
             ));
         }
 
-        output.push_str(&format!("\n{}\n", "─".repeat(term_size::dimensions().map_or(120, |(w, _)| w.max(80))).dimmed()));
+        output.push_str(&format!(
+            "\n{}\n",
+            "─"
+                .repeat(term_size::dimensions().map_or(120, |(w, _)| w.max(80)))
+                .dimmed()
+        ));
 
         // Summary
         let total = results.len();
@@ -172,14 +187,44 @@ impl Reporter {
     }
 
     fn generate_json_report(&self, results: &[&ScanResult]) -> Result<String> {
+        let malicious_results: Vec<_> = results.iter().filter(|r| r.is_malicious).collect();
+
+        // Calculate threat statistics
+        let mut severity_counts = std::collections::HashMap::new();
+        let mut source_counts = std::collections::HashMap::new();
+        let mut threat_type_counts = std::collections::HashMap::new();
+
+        for result in &malicious_results {
+            if let Some(threat) = &result.threat {
+                *severity_counts
+                    .entry(format!("{:?}", threat.severity))
+                    .or_insert(0) += 1;
+                *source_counts
+                    .entry(format!("{:?}", threat.source_database))
+                    .or_insert(0) += 1;
+                *threat_type_counts
+                    .entry(format!("{:?}", threat.threat_type))
+                    .or_insert(0) += 1;
+            }
+        }
+
         let report = serde_json::json!({
             "timestamp": Utc::now(),
             "scan_type": "npm_security_scan",
             "threats_only": self.threats_only,
             "summary": {
                 "total_packages": results.len(),
-                "malicious_packages": results.iter().filter(|r| r.is_malicious).count(),
-                "clean_packages": results.iter().filter(|r| !r.is_malicious).count()
+                "malicious_packages": malicious_results.len(),
+                "clean_packages": results.len() - malicious_results.len(),
+                "severity_breakdown": severity_counts,
+                "source_breakdown": source_counts,
+                "threat_type_breakdown": threat_type_counts,
+                "packages_with_cvss_scores": malicious_results.iter().filter(|r|
+                    r.threat.as_ref().is_some_and(|t| t.cvss_score.is_some())
+                ).count(),
+                "github_reviewed_packages": malicious_results.iter().filter(|r|
+                    r.threat.as_ref().is_some_and(|t| t.github_reviewed == Some(true))
+                ).count()
             },
             "results": results
         });
@@ -191,29 +236,74 @@ impl Reporter {
         let mut output = String::new();
 
         // CSV Header
-        output.push_str("Package Name,Version,Path,Size (bytes),Is Malicious,Threat Type,Severity,Description\n");
+        output.push_str("Package Name,Version,Path,Size (bytes),Is Malicious,Threat Type,Severity,Description,CWE IDs,CVSS Score,CVSS Vector,GitHub Reviewed,GitHub Reviewed At,NVD Published At,Source Database,Aliases,References,Discovered Date\n");
 
         // CSV Rows
         for result in results {
             let package = &result.package;
             let is_malicious = if result.is_malicious { "true" } else { "false" };
 
-            let (threat_type, severity, description) = if let Some(threat) = &result.threat {
+            let (
+                threat_type,
+                severity,
+                description,
+                cwe_ids,
+                cvss_score,
+                cvss_vector,
+                github_reviewed,
+                github_reviewed_at,
+                nvd_published_at,
+                source_db,
+                aliases,
+                references,
+                discovered,
+            ) = if let Some(threat) = &result.threat {
                 (
                     format!("{:?}", threat.threat_type),
                     format!("{:?}", threat.severity),
                     threat.description.replace(',', ";").replace('\n', " "),
+                    threat.cwe_ids.join(";"),
+                    threat
+                        .cvss_score
+                        .map_or("N/A".to_string(), |s| s.to_string()),
+                    threat.cvss_vector.clone().unwrap_or("N/A".to_string()),
+                    threat
+                        .github_reviewed
+                        .map_or("N/A".to_string(), |r| r.to_string()),
+                    threat.github_reviewed_at.map_or("N/A".to_string(), |dt| {
+                        dt.format("%Y-%m-%d %H:%M:%S UTC").to_string()
+                    }),
+                    threat.nvd_published_at.map_or("N/A".to_string(), |dt| {
+                        dt.format("%Y-%m-%d %H:%M:%S UTC").to_string()
+                    }),
+                    format!("{:?}", threat.source_database),
+                    threat.aliases.join(";"),
+                    threat.references.join(";"),
+                    threat
+                        .discovered
+                        .format("%Y-%m-%d %H:%M:%S UTC")
+                        .to_string(),
                 )
             } else {
                 (
                     "None".to_string(),
                     "None".to_string(),
                     "No threats detected".to_string(),
+                    "N/A".to_string(),
+                    "N/A".to_string(),
+                    "N/A".to_string(),
+                    "N/A".to_string(),
+                    "N/A".to_string(),
+                    "N/A".to_string(),
+                    "N/A".to_string(),
+                    "N/A".to_string(),
+                    "N/A".to_string(),
+                    "N/A".to_string(),
                 )
             };
 
             output.push_str(&format!(
-                "{},{},{},{},{},{},{},\"{}\"\n",
+                "{},{},{},{},{},{},{},\"{}\",\"{}\",{},\"{}\",{},{},{},\"{}\",\"{}\",\"{}\",{}\n",
                 package.name.replace(',', ";"),
                 package.version,
                 package.path.replace(',', ";"),
@@ -221,7 +311,17 @@ impl Reporter {
                 is_malicious,
                 threat_type,
                 severity,
-                description
+                description,
+                cwe_ids,
+                cvss_score,
+                cvss_vector,
+                github_reviewed,
+                github_reviewed_at,
+                nvd_published_at,
+                source_db,
+                aliases,
+                references,
+                discovered
             ));
         }
 
@@ -271,6 +371,48 @@ impl Reporter {
                     "📝 Description:".bright_white().bold(),
                     threat.description.bright_white()
                 );
+
+                if !threat.cwe_ids.is_empty() {
+                    println!(
+                        "{} {}",
+                        "🏷️  CWE IDs:".bright_white().bold(),
+                        threat.cwe_ids.join(", ").bright_magenta()
+                    );
+                }
+
+                if let Some(cvss_score) = threat.cvss_score {
+                    println!(
+                        "{} {}",
+                        "📊 CVSS Score:".bright_white().bold(),
+                        format!("{:.1}", cvss_score).bright_cyan()
+                    );
+                }
+
+                if let Some(reviewed) = threat.github_reviewed {
+                    println!(
+                        "{} {}",
+                        "✅ GitHub Reviewed:".bright_white().bold(),
+                        if reviewed {
+                            "Yes".bright_green()
+                        } else {
+                            "No".bright_red()
+                        }
+                    );
+                }
+
+                println!(
+                    "{} {}",
+                    "📊 Source:".bright_white().bold(),
+                    format!("{:?}", threat.source_database).bright_blue()
+                );
+
+                if !threat.aliases.is_empty() {
+                    println!(
+                        "{} {}",
+                        "🆔 Aliases:".bright_white().bold(),
+                        threat.aliases.join(", ").bright_yellow()
+                    );
+                }
 
                 if !threat.references.is_empty() {
                     println!(

@@ -11,9 +11,27 @@ pub struct MaliciousPackage {
     pub description: String,
     pub severity: Severity,
     pub references: Vec<String>,
+    // New GitHub Advisory Database fields
+    #[serde(default)]
+    pub cwe_ids: Vec<String>,
+    #[serde(default)]
+    pub github_reviewed: Option<bool>,
+    #[serde(default)]
+    pub github_reviewed_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub nvd_published_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub cvss_score: Option<f32>,
+    #[serde(default)]
+    pub cvss_vector: Option<String>,
+    #[serde(default = "default_source_database")]
+    pub source_database: VulnerabilitySource,
+    #[serde(default)]
+    pub aliases: Vec<String>, // CVE IDs, other identifiers
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub enum ThreatType {
     SupplyChainAttack,
     Cryptojacking,
@@ -21,6 +39,30 @@ pub enum ThreatType {
     Backdoor,
     DataExfiltration,
     Ransomware,
+    CrossSiteScripting,
+    SqlInjection,
+    RemoteCodeExecution,
+    DenialOfService,
+    PrivilegeEscalation,
+    BufferOverflow,
+    Other,
+    // For backward compatibility with unknown variants
+    #[serde(other)]
+    Unknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum VulnerabilitySource {
+    OSV,
+    GitHub,
+    BuiltIn,
+    Combined, // When data is merged from multiple sources
+    #[serde(other)]
+    Unknown, // For backward compatibility
+}
+
+fn default_source_database() -> VulnerabilitySource {
+    VulnerabilitySource::BuiltIn
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, PartialOrd)]
@@ -195,6 +237,14 @@ impl ThreatDatabase {
                     "https://github.com/chalk/chalk/issues/656".to_string(),
                     "https://github.com/debug-js/debug/issues/1005".to_string(),
                 ],
+                cwe_ids: vec!["CWE-506".to_string()], // Embedded Malicious Code
+                github_reviewed: None,
+                github_reviewed_at: None,
+                nvd_published_at: None,
+                cvss_score: Some(9.8),
+                cvss_vector: None,
+                source_database: VulnerabilitySource::BuiltIn,
+                aliases: vec![],
             };
 
             self.malicious_packages
@@ -231,6 +281,14 @@ impl ThreatDatabase {
                 references: vec![
                     "https://socket.dev/blog/nx-packages-compromised".to_string(),
                 ],
+                cwe_ids: vec!["CWE-522".to_string()], // Insufficiently Protected Credentials
+                github_reviewed: None,
+                github_reviewed_at: None,
+                nvd_published_at: None,
+                cvss_score: Some(9.1),
+                cvss_vector: None,
+                source_database: VulnerabilitySource::BuiltIn,
+                aliases: vec![],
             };
 
             self.malicious_packages
@@ -286,6 +344,14 @@ impl ThreatDatabase {
                 description: description.to_string(),
                 severity: Severity::High,
                 references: vec![],
+                cwe_ids: vec![],
+                github_reviewed: None,
+                github_reviewed_at: None,
+                nvd_published_at: None,
+                cvss_score: None,
+                cvss_vector: None,
+                source_database: VulnerabilitySource::BuiltIn,
+                aliases: vec![],
             };
 
             self.malicious_packages

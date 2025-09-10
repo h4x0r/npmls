@@ -62,8 +62,9 @@ async fn main() -> anyhow::Result<()> {
         .arg(
             Arg::new("list-threats")
                 .long("list-threats")
-                .action(clap::ArgAction::SetTrue)
-                .help("List all known vulnerable packages and versions, then exit")
+                .value_name("FILTER")
+                .num_args(0..=1)
+                .help("List all known vulnerable packages and versions, then exit. Optional filter to search for specific packages.")
         )
         .get_matches();
 
@@ -81,7 +82,8 @@ async fn main() -> anyhow::Result<()> {
     let threats_only = matches.get_flag("threats-only");
     let offline_mode = matches.get_flag("offline");
     let update_db = matches.get_flag("update-db");
-    let list_threats = matches.get_flag("list-threats");
+    let list_threats_filter = matches.get_one::<String>("list-threats");
+    let list_threats = list_threats_filter.is_some();
     let output_file = matches.get_one::<String>("output").map(PathBuf::from);
     let format_raw = matches.get_one::<String>("format").unwrap();
 
@@ -139,6 +141,39 @@ async fn main() -> anyhow::Result<()> {
         let mut sorted_packages: Vec<_> = grouped_threats.keys().collect();
         sorted_packages.sort();
 
+        // Apply filter if provided
+        if let Some(filter) = list_threats_filter {
+            let filter_lower = filter.to_lowercase();
+            sorted_packages.retain(|package_name| {
+                let package_lower = package_name.to_lowercase();
+                let threats = grouped_threats.get(*package_name).unwrap();
+
+                // Check package name or any threat description/aliases
+                package_lower.contains(&filter_lower)
+                    || threats.iter().any(|threat| {
+                        threat.description.to_lowercase().contains(&filter_lower)
+                            || threat
+                                .aliases
+                                .iter()
+                                .any(|alias| alias.to_lowercase().contains(&filter_lower))
+                    })
+            });
+
+            if sorted_packages.is_empty() {
+                println!(
+                    "{}",
+                    format!("No threats found matching filter: '{}'", filter).yellow()
+                );
+                return Ok(());
+            }
+
+            println!(
+                "{}",
+                format!("Filtered results for: '{}'", filter).bright_cyan()
+            );
+            println!();
+        }
+
         for package_name in sorted_packages {
             let threats = grouped_threats.get(package_name).unwrap();
 
@@ -158,6 +193,14 @@ async fn main() -> anyhow::Result<()> {
                     crate::threats::ThreatType::Backdoor => "Backdoor",
                     crate::threats::ThreatType::DataExfiltration => "Data Exfiltration",
                     crate::threats::ThreatType::Ransomware => "Ransomware",
+                    crate::threats::ThreatType::CrossSiteScripting => "Cross-Site Scripting",
+                    crate::threats::ThreatType::SqlInjection => "SQL Injection",
+                    crate::threats::ThreatType::RemoteCodeExecution => "Remote Code Execution",
+                    crate::threats::ThreatType::DenialOfService => "Denial of Service",
+                    crate::threats::ThreatType::PrivilegeEscalation => "Privilege Escalation",
+                    crate::threats::ThreatType::BufferOverflow => "Buffer Overflow",
+                    crate::threats::ThreatType::Other => "Other",
+                    crate::threats::ThreatType::Unknown => "Unknown",
                 };
 
                 println!(

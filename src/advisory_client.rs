@@ -26,6 +26,7 @@ pub struct OSVVulnerability {
     pub references: Option<Vec<OSVReference>>,
     pub published: Option<String>,
     pub modified: String,
+    pub aliases: Option<Vec<String>>, // CVE IDs, GHSA IDs, etc.
 }
 
 #[derive(Debug, Deserialize)]
@@ -55,4 +56,76 @@ pub struct OSVSeverity {
 #[derive(Debug, Deserialize)]
 pub struct OSVReference {
     pub url: String,
+}
+
+// GitHub Advisory Database structures
+#[derive(Debug, Deserialize)]
+pub struct GitHubAdvisory {
+    pub schema_version: String,
+    pub id: String, // GHSA-xxxx-xxxx-xxxx
+    pub modified: String,
+    pub published: Option<String>,
+    pub withdrawn: Option<String>,
+    pub aliases: Option<Vec<String>>, // CVE IDs, etc.
+    pub summary: String,
+    pub details: String,
+    pub severity: Option<Vec<GitHubSeverity>>,
+    pub affected: Vec<GitHubAffected>,
+    pub references: Option<Vec<GitHubReference>>,
+    pub database_specific: Option<GitHubDatabaseSpecific>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GitHubSeverity {
+    #[serde(rename = "type")]
+    pub severity_type: String, // CVSS_V3, etc.
+    pub score: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GitHubAffected {
+    pub package: GitHubPackage,
+    pub ranges: Option<Vec<GitHubRange>>,
+    pub versions: Option<Vec<String>>,
+    pub ecosystem_specific: Option<serde_json::Value>,
+    pub database_specific: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GitHubPackage {
+    pub ecosystem: String,
+    pub name: String,
+    pub purl: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GitHubRange {
+    #[serde(rename = "type")]
+    pub range_type: String, // ECOSYSTEM, SEMVER, etc.
+    pub events: Vec<GitHubRangeEvent>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GitHubRangeEvent {
+    pub introduced: Option<String>,
+    pub fixed: Option<String>,
+    pub last_affected: Option<String>,
+    pub limit: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GitHubReference {
+    #[serde(rename = "type")]
+    pub ref_type: String, // WEB, ADVISORY, etc.
+    pub url: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GitHubDatabaseSpecific {
+    pub cwe_ids: Option<Vec<String>>,
+    pub severity: Option<String>, // LOW, MODERATE, HIGH, CRITICAL
+    pub github_reviewed: Option<bool>,
+    pub github_reviewed_at: Option<String>,
+    pub nvd_published_at: Option<String>,
+    pub last_known_affected_version_range: Option<String>,
 }
