@@ -1,6 +1,6 @@
 [package]
 name = "npmls"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Fast cross-platform scanner for npm modules and malicious packages"
 authors = ["Albert Hui <albert@securityronin.com>"]
