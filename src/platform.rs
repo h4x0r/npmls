@@ -153,7 +153,7 @@ impl PlatformScanner {
         // Use PowerShell for fast directory enumeration
         let output = TokioCommand::new("powershell")
             .arg("-Command")
-            .arg(&format!(
+            .arg(format!(
                 "Get-ChildItem -Path '{}' -Name 'node_modules' -Directory -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName",
                 drive
             ))
@@ -179,7 +179,7 @@ impl PlatformScanner {
     async fn windows_dir_fallback(drive: &str) -> Result<Vec<PathBuf>> {
         let output = TokioCommand::new("cmd")
             .arg("/C")
-            .arg(&format!("dir \"{}node_modules\" /s /b /ad", drive))
+            .arg(format!("dir \"{}node_modules\" /s /b /ad", drive))
             .output()
             .await?;
 
