@@ -124,10 +124,6 @@ async fn main() -> anyhow::Result<()> {
             return Ok(());
         }
 
-        println!("{}", "🚨 Known Vulnerable NPM Packages".bright_red().bold());
-        println!("{}", "═".repeat(80).dimmed());
-        println!();
-
         // Group threats by package name
         let mut grouped_threats: HashMap<String, Vec<&crate::threats::MaliciousPackage>> =
             HashMap::new();
@@ -213,15 +209,51 @@ async fn main() -> anyhow::Result<()> {
                 );
 
                 if !threat.description.is_empty() {
-                    println!(
-                        "     {}",
-                        threat
-                            .description
-                            .chars()
-                            .take(120)
-                            .collect::<String>()
-                            .dimmed()
-                    );
+                    // Truncate description at "The following packages and versions are affected"
+                    let mut description = threat.description.as_str();
+                    if let Some(pos) =
+                        description.find("The following packages and versions are affected")
+                    {
+                        description = &description[..pos];
+                    }
+
+                    // Trim any trailing whitespace but keep the final period
+                    description = description.trim_end_matches(&[' ', '\n', '\r'][..]);
+
+                    // Add period if it doesn't end with one
+                    let mut final_description = description.to_string();
+                    if !final_description.ends_with('.') {
+                        final_description.push('.');
+                    }
+
+                    if !final_description.is_empty() {
+                        // Word wrap description to fit terminal width
+                        let terminal_width =
+                            term_size::dimensions().map_or(120, |(w, _)| w.max(80));
+                        let desc_width = terminal_width.saturating_sub(5); // Account for indent
+
+                        let words: Vec<&str> = final_description.split_whitespace().collect();
+                        let mut current_line = String::new();
+
+                        for word in words {
+                            if current_line.len() + word.len() < desc_width {
+                                if !current_line.is_empty() {
+                                    current_line.push(' ');
+                                }
+                                current_line.push_str(word);
+                            } else {
+                                if !current_line.is_empty() {
+                                    println!("     {}", current_line.dimmed());
+                                    current_line.clear();
+                                }
+                                current_line.push_str(word);
+                            }
+                        }
+
+                        if !current_line.is_empty() {
+                            println!("     {}", current_line.dimmed());
+                        }
+                    }
                 }
             }
             println!();

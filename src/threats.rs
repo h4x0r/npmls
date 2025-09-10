@@ -120,6 +120,7 @@ impl ThreatDatabase {
 
     pub async fn load_or_update_database(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if !self.online_mode {
+            println!("🔒 Using offline mode with built-in threats only ✅");
             return Ok(());
         }
 
@@ -143,14 +144,15 @@ impl ThreatDatabase {
                     self.merge_cached_database(cached_db.clone());
                     let total_threats = self.get_all_malicious_packages().len();
                     if cached_db.total_vulnerabilities > 0 {
-                        print!(
-                            "📥 Loaded {} vulnerabilities from cache ({}h old) ",
+                        println!(
+                            "📥 Loaded {} vulnerabilities from cache ({} unique after deduplication, {}h old) ✅",
                             cached_db.total_vulnerabilities,
+                            total_threats,
                             age.num_hours()
                         );
                     } else {
-                        print!(
-                            "📥 Cache is up to date ({}h old), using {} built-in threats ",
+                        println!(
+                            "📥 Cache is up to date ({}h old), using {} built-in threats ✅",
                             age.num_hours(),
                             total_threats
                         );
@@ -159,12 +161,12 @@ impl ThreatDatabase {
             }
             Ok(None) => {
                 // No cached database, download fresh data
-                print!("📥 No cached database found, downloading... ");
+                println!("📥 No cached database found, downloading...");
                 self.update_database_with_progress(&updater).await?;
             }
             Err(_) => {
                 // Error loading cache, try to update
-                print!("⚠️  Error loading cached database, downloading fresh data... ");
+                println!("⚠️  Error loading cached database, downloading fresh data...");
                 self.update_database_with_progress(&updater).await?;
             }
         }

@@ -56,28 +56,28 @@ impl DatabaseUpdater {
         &self,
         _package_names: &[String],
     ) -> Result<VulnerabilityDatabase> {
-        print!("{} ", "🔄 Updating vulnerability database...".bright_blue());
+        println!("{}", "🔄 Updating vulnerability database...".bright_blue());
 
         // Download from both OSV and GitHub Advisory databases
         let osv_db = self.download_complete_osv_database().await?;
         let github_db = self.download_github_advisory_database().await?;
         let database = self.merge_databases(osv_db, github_db);
-        println!("✅ Complete");
+        println!("{}", "✅ Database update complete".bright_green());
         Ok(database)
     }
 
     #[allow(clippy::future_not_send)]
     pub async fn update_database_force(&self) -> Result<VulnerabilityDatabase> {
-        print!(
-            "{} ",
-            "🔄 Updating vulnerability database (forced)...".bright_blue()
+        println!(
+            "{}",
+            "🔄 Force updating vulnerability database...".bright_blue()
         );
 
         // Force update - download from both databases
         let osv_db = self.download_complete_osv_database().await?;
         let github_db = self.download_github_advisory_database().await?;
         let database = self.merge_databases(osv_db, github_db);
-        println!("✅ Complete");
+        println!("{}", "✅ Force update complete".bright_green());
         Ok(database)
     }
 
@@ -124,7 +124,7 @@ impl DatabaseUpdater {
         pb.finish_and_clear();
         #[allow(clippy::cast_precision_loss)]
         let size_mb = zip_data.len() as f64 / 1_000_000.0;
-        print!("📦 {size_mb:.1}MB ");
+        println!("📦 Downloaded {size_mb:.1}MB from OSV database");
 
         // Extract and parse vulnerability data with progress bar
         let database = self.parse_osv_zip_data(&zip_data).await?;
@@ -191,7 +191,7 @@ impl DatabaseUpdater {
 
         let total_vulnerabilities = all_packages.values().map(Vec::len).sum();
 
-        print!("({processed_count} vulns) ");
+        println!("🔍 Processed {processed_count} OSV vulnerabilities");
 
         let database = VulnerabilityDatabase {
             last_updated: Utc::now(),
@@ -377,8 +377,8 @@ impl DatabaseUpdater {
 
     #[allow(clippy::future_not_send)]
     async fn download_github_advisory_database(&self) -> Result<VulnerabilityDatabase> {
-        print!(
-            "{} ",
+        println!(
+            "{}",
             "⬇️  Downloading GitHub Advisory Database...".bright_blue()
         );
 
@@ -400,7 +400,7 @@ impl DatabaseUpdater {
         }
 
         let zip_data = response.bytes().await?.to_vec();
-        print!("parsing... ");
+        println!("🔄 Parsing GitHub Advisory database...");
 
         let database = self.parse_github_zip_data(&zip_data).await?;
 
@@ -471,7 +471,7 @@ impl DatabaseUpdater {
 
         pb.finish_and_clear();
 
-        print!("({processed_count} advisories) ");
+        println!("🔍 Processed {processed_count} GitHub advisories");
 
         let database = VulnerabilityDatabase {
             last_updated: Utc::now(),
