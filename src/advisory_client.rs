@@ -61,10 +61,12 @@ pub struct OSVReference {
 // GitHub Advisory Database structures
 #[derive(Debug, Deserialize)]
 pub struct GitHubAdvisory {
+    #[allow(dead_code)]
     pub schema_version: String,
     pub id: String, // GHSA-xxxx-xxxx-xxxx
     pub modified: String,
     pub published: Option<String>,
+    #[allow(dead_code)]
     pub withdrawn: Option<String>,
     pub aliases: Option<Vec<String>>, // CVE IDs, etc.
     pub summary: String,
@@ -87,7 +89,9 @@ pub struct GitHubAffected {
     pub package: GitHubPackage,
     pub ranges: Option<Vec<GitHubRange>>,
     pub versions: Option<Vec<String>>,
+    #[allow(dead_code)]
     pub ecosystem_specific: Option<serde_json::Value>,
+    #[allow(dead_code)]
     pub database_specific: Option<serde_json::Value>,
 }
 
@@ -95,12 +99,14 @@ pub struct GitHubAffected {
 pub struct GitHubPackage {
     pub ecosystem: String,
     pub name: String,
+    #[allow(dead_code)]
     pub purl: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct GitHubRange {
     #[serde(rename = "type")]
+    #[allow(dead_code)]
     pub range_type: String, // ECOSYSTEM, SEMVER, etc.
     pub events: Vec<GitHubRangeEvent>,
 }
@@ -108,14 +114,18 @@ pub struct GitHubRange {
 #[derive(Debug, Deserialize)]
 pub struct GitHubRangeEvent {
     pub introduced: Option<String>,
+    #[allow(dead_code)]
     pub fixed: Option<String>,
+    #[allow(dead_code)]
     pub last_affected: Option<String>,
+    #[allow(dead_code)]
     pub limit: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct GitHubReference {
     #[serde(rename = "type")]
+    #[allow(dead_code)]
     pub ref_type: String, // WEB, ADVISORY, etc.
     pub url: String,
 }
@@ -127,5 +137,6 @@ pub struct GitHubDatabaseSpecific {
     pub github_reviewed: Option<bool>,
     pub github_reviewed_at: Option<String>,
     pub nvd_published_at: Option<String>,
+    #[allow(dead_code)]
     pub last_known_affected_version_range: Option<String>,
 }

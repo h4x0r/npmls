@@ -53,6 +53,7 @@ pub enum ThreatType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum VulnerabilitySource {
+    #[allow(clippy::upper_case_acronyms)]
     OSV,
     GitHub,
     BuiltIn,

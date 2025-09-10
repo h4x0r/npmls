@@ -418,19 +418,14 @@ impl DatabaseUpdater {
 
         // Progress bar for GitHub advisories
         let npm_files: Vec<_> = (0..archive.len())
-            .filter_map(|i| {
+            .filter(|&i| {
                 if let Ok(file) = archive.by_index(i) {
                     let path = file.name();
-                    if path.contains("/advisories/github-reviewed/")
+                    path.contains("/advisories/github-reviewed/")
                         && path.ends_with(".json")
                         && path.contains("/npm/")
-                    {
-                        Some(i)
-                    } else {
-                        None
-                    }
                 } else {
-                    None
+                    false
                 }
             })
             .collect();
