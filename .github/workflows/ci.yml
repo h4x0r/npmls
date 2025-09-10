@@ -15,8 +15,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        rust: [stable]
+        include:
+          - os: ubuntu-latest
+            rust: stable
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            rust: stable
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            rust: stable
+            target: x86_64-apple-darwin
 
     steps:
     - uses: actions/checkout@v4
@@ -25,40 +33,60 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: ${{ matrix.rust }}
+        targets: ${{ matrix.target }}
         components: rustfmt, clippy
     
     - name: Cache cargo registry
       uses: actions/cache@v3
       with:
         path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-${{ matrix.target }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |
-          ${{ runner.os }}-cargo-registry-
+          ${{ runner.os }}-${{ matrix.target }}-cargo-registry-
     
     - name: Cache cargo index
       uses: actions/cache@v3
       with:
         path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-${{ matrix.target }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |
-          ${{ runner.os }}-cargo-index-
+          ${{ runner.os }}-${{ matrix.target }}-cargo-index-
     
     - name: Cache cargo build
       uses: actions/cache@v3
       with:
         path: target
-        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-${{ matrix.target }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |
-          ${{ runner.os }}-cargo-build-target-
+          ${{ runner.os }}-${{ matrix.target }}-cargo-build-
 
     - name: Check formatting
       run: cargo fmt --all -- --check
 
-    - name: Run clippy
-      run: cargo clippy --all-targets --all-features -- -D warnings -A dead_code -A unused_imports -A clippy::unnecessary-filter-map -A clippy::upper-case-acronyms
+    - name: Run clippy  
+      run: cargo clippy --all-targets --all-features --target ${{ matrix.target }} -- -D warnings -A dead_code -A unused_imports -A clippy::unnecessary-filter-map -A clippy::upper-case-acronyms
 
     - name: Run tests
-      run: cargo test --verbose
+      run: cargo test --target ${{ matrix.target }} --verbose
 
     - name: Build release
-      run: cargo build --release --verbose
+      run: cargo build --release --target ${{ matrix.target }} --verbose
+      
+    - name: Verify binary exists
+      shell: bash
+      run: |
+        if [[ "${{ matrix.target }}" == *"windows"* ]]; then
+          BINARY_PATH="target/${{ matrix.target }}/release/npmls.exe"
+        else
+          BINARY_PATH="target/${{ matrix.target }}/release/npmls"
+        fi
+        
+        if [[ -f "$BINARY_PATH" ]]; then
+          echo "✅ Binary built successfully: $BINARY_PATH"
+          ls -la "$BINARY_PATH"
+        else
+          echo "❌ Binary not found: $BINARY_PATH"
+          echo "Contents of target/${{ matrix.target }}/release/:"
+          ls -la "target/${{ matrix.target }}/release/" || true
+          exit 1
+        fi
