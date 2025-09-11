@@ -304,10 +304,12 @@ impl PlatformScanner {
 
         pb.finish_and_clear();
 
-        Ok(paths
+        let result = paths
             .lock()
             .map_err(|_| anyhow::anyhow!("Failed to access MFT scan results"))?
-            .clone())
+            .clone();
+
+        Ok(result)
     }
 
     #[cfg(target_os = "windows")]
