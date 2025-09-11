@@ -168,8 +168,21 @@ impl PlatformScanner {
     async fn scan_drive_for_node_modules(drive: &str) -> Result<Vec<PathBuf>> {
         // Try MFT scanning first for maximum performance
         match Self::mft_scan_drive(drive).await {
-            Ok(paths) => Ok(paths),
-            Err(_) => {
+            Ok(paths) => {
+                println!("🔧 MFT scan of {} found {} paths", drive, paths.len());
+                // If MFT finds nothing, try PowerShell as fallback
+                if paths.is_empty() {
+                    println!("⚠️  MFT found no results, falling back to PowerShell...");
+                    Self::powershell_scan_drive(drive).await
+                } else {
+                    Ok(paths)
+                }
+            }
+            Err(e) => {
+                println!(
+                    "⚠️  MFT scan failed for {}: {}, falling back to PowerShell...",
+                    drive, e
+                );
                 // Fallback to PowerShell if MFT fails
                 Self::powershell_scan_drive(drive).await
             }
@@ -224,28 +237,64 @@ impl PlatformScanner {
                 let mft =
                     Mft::new(volume).map_err(|e| anyhow::anyhow!("Failed to read MFT: {}", e))?;
 
+                let mut node_modules_found = 0;
+                let mut debug_paths = Vec::new();
+
                 mft.iterate_files(|file| {
                     #[allow(unused_variables)]
                     let info = FileInfo::new(&mft, file);
 
-                    // Update counter every 1000 files
+                    // Update counter
                     let count = files_processed.fetch_add(1, Ordering::Relaxed);
+
+                    // Debug: Log first few directory entries
+                    if count < 10 && info.is_directory {
+                        debug_paths.push(format!(
+                            "Debug: {} - {}",
+                            info.name,
+                            info.path.to_string_lossy()
+                        ));
+                    }
 
                     // Check if this is a directory named "node_modules"
                     if info.is_directory && info.name == "node_modules" {
+                        node_modules_found += 1;
                         let path_str = info.path.to_string_lossy();
                         let full_path = PathBuf::from(format!(
-                            "{}\\{}",
-                            drive_owned.trim_end_matches('\\'),
-                            path_str.trim_start_matches('\\')
+                            "{}{}",
+                            drive_owned,
+                            if path_str.starts_with('\\') {
+                                path_str.as_ref()
+                            } else {
+                                &format!("\\{}", path_str)
+                            }
                         ));
+
+                        println!(
+                            "🔧 Found node_modules at: {} -> {}",
+                            path_str,
+                            full_path.display()
+                        );
+
                         if full_path.exists() {
+                            println!("✅ Path exists, adding to results");
                             if let Ok(mut locked_paths) = paths.lock() {
                                 locked_paths.push(full_path);
                             }
+                        } else {
+                            println!("❌ Path does not exist: {}", full_path.display());
                         }
                     }
                 });
+
+                // Debug output
+                println!(
+                    "🔧 MFT scan complete for {}: {} total node_modules found",
+                    drive_owned, node_modules_found
+                );
+                for debug_path in debug_paths {
+                    println!("🔧 {}", debug_path);
+                }
 
                 Ok(())
             }
