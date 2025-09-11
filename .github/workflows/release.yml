@@ -29,12 +29,10 @@ jobs:
       uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
 
     - name: Install Rust toolchain
-      uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1.0.7
+      uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
-        target: ${{ matrix.target }}
-        override: true
-        profile: minimal
+        targets: ${{ matrix.target }}
 
 
     - name: Cache cargo dependencies
@@ -50,10 +48,7 @@ jobs:
           ${{ runner.os }}-cargo-
 
     - name: Build release binary
-      uses: actions-rs/cargo@844f36862e911db73fe0815f00a4a2602c279505 # v1.0.3
-      with:
-        command: build
-        args: --release --target ${{ matrix.target }}
+      run: cargo build --release --target ${{ matrix.target }}
 
     - name: Create binary name
       shell: bash
