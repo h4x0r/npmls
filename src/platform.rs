@@ -171,6 +171,7 @@ impl PlatformScanner {
         let paths = Arc::new(Mutex::new(Vec::new()));
         let drive_letter = drive.chars().next().unwrap();
         let volume_path = format!("\\\\.\\{}:", drive_letter);
+        let drive_owned = drive.to_string(); // Clone drive for move into closure
 
         tokio::task::spawn_blocking({
             let paths = Arc::clone(&paths);
@@ -191,7 +192,7 @@ impl PlatformScanner {
                             let path_str = info.path.to_string_lossy();
                             let full_path = PathBuf::from(format!(
                                 "{}\\{}",
-                                drive.trim_end_matches('\\'),
+                                drive_owned.trim_end_matches('\\'),
                                 path_str.trim_start_matches('\\')
                             ));
                             if full_path.exists() {
