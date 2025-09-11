@@ -165,7 +165,7 @@ impl PlatformScanner {
     #[allow(clippy::manual_map)]
     async fn mft_scan_drive(drive: &str) -> Result<Vec<PathBuf>> {
         #[allow(unused_imports)]
-        use ntfs_reader::{FileInfo, Mft, Volume};
+        use ntfs_reader::{file_info::FileInfo, mft::Mft, volume::Volume};
         use std::sync::{Arc, Mutex};
 
         let paths = Arc::new(Mutex::new(Vec::new()));
