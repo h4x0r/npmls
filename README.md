@@ -191,6 +191,7 @@ The application automatically downloads and maintains vulnerability data from mu
 
 **Albert Hui**  
 Email: albert@securityronin.com  
+LinkedIn: https://www.linkedin.com/in/alberthui  
 Security Researcher & Developer
 
 ## Contributing
