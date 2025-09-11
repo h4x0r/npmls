@@ -108,18 +108,31 @@ impl PlatformScanner {
 
     #[cfg(target_os = "windows")]
     async fn windows_mft_scan() -> Result<Vec<PathBuf>> {
-        println!("🪟 Using Windows MFT (Master File Table) scanning for ultra-fast directory enumeration...");
+        use indicatif::{ProgressBar, ProgressStyle};
+
+        println!("🪟 Using Windows MFT scanning for ultra-fast directory enumeration...");
 
         // Get all drives
         let drives = Self::get_windows_drives()?;
         let mut all_paths = Vec::new();
 
-        for drive in drives {
-            println!("   Scanning drive {} with MFT lookup...", drive);
-            let paths = Self::scan_drive_for_node_modules(&drive).await?;
+        // Create progress bar for drives
+        let pb = ProgressBar::new(drives.len() as u64);
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template("\r🔍 [{bar:20.cyan/blue}] {pos}/{len} drives scanned ({msg})")
+                .unwrap()
+                .progress_chars("#>-"),
+        );
+
+        for (i, drive) in drives.iter().enumerate() {
+            pb.set_message(format!("Scanning {}", drive));
+            let paths = Self::scan_drive_for_node_modules(drive).await?;
             all_paths.extend(paths);
+            pb.set_position((i + 1) as u64);
         }
 
+        pb.finish_and_clear();
         println!("✅ Found {} node_modules directories", all_paths.len());
         Ok(all_paths)
     }
@@ -166,8 +179,10 @@ impl PlatformScanner {
     #[cfg(target_os = "windows")]
     #[allow(clippy::manual_map)]
     async fn mft_scan_drive(drive: &str) -> Result<Vec<PathBuf>> {
+        use indicatif::{ProgressBar, ProgressStyle};
         #[allow(unused_imports)]
         use ntfs_reader::{file_info::FileInfo, mft::Mft, volume::Volume};
+        use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::{Arc, Mutex};
 
         let paths = Arc::new(Mutex::new(Vec::new()));
@@ -175,8 +190,33 @@ impl PlatformScanner {
         let volume_path = format!("\\\\.\\{}:", drive_letter);
         let drive_owned = drive.to_string(); // Clone drive for move into closure
 
-        tokio::task::spawn_blocking({
+        // Create a spinner for MFT iteration
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(
+            ProgressStyle::default_spinner()
+                .template("\r    {spinner} Scanning {msg} files processed...")
+                .unwrap(),
+        );
+        pb.set_message(format!("{} - 0", drive));
+
+        let files_processed = Arc::new(AtomicUsize::new(0));
+
+        // Update spinner periodically
+        let pb_clone = pb.clone();
+        let files_processed_clone = Arc::clone(&files_processed);
+        let drive_clone = drive.to_string();
+        tokio::spawn(async move {
+            while !pb_clone.is_finished() {
+                let count = files_processed_clone.load(Ordering::Relaxed);
+                pb_clone.set_message(format!("{} - {}", drive_clone, count));
+                pb_clone.tick();
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+        });
+
+        let result = tokio::task::spawn_blocking({
             let paths = Arc::clone(&paths);
+            let files_processed = Arc::clone(&files_processed);
             move || -> Result<()> {
                 let volume = Volume::new(&volume_path)
                     .map_err(|e| anyhow::anyhow!("Failed to open volume {}: {}", volume_path, e))?;
@@ -187,6 +227,9 @@ impl PlatformScanner {
                 mft.iterate_files(|file| {
                     #[allow(unused_variables)]
                     let info = FileInfo::new(&mft, file);
+
+                    // Update counter every 1000 files
+                    let count = files_processed.fetch_add(1, Ordering::Relaxed);
 
                     // Check if this is a directory named "node_modules"
                     if info.is_directory && info.name == "node_modules" {
@@ -208,6 +251,8 @@ impl PlatformScanner {
             }
         })
         .await??;
+
+        pb.finish_and_clear();
 
         let result = paths
             .lock()
