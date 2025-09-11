@@ -368,7 +368,7 @@ impl PlatformScanner {
     // Windows-specific fd scanner with progress reporting
     #[cfg(target_os = "windows")]
     async fn fast_directory_scan_with_progress(
-        root: &PathBuf,
+        root: &Path,
         target_name: &str,
         max_depth: usize,
         progress_bar: &indicatif::ProgressBar,
@@ -379,11 +379,10 @@ impl PlatformScanner {
         let found_paths = Arc::new(Mutex::new(Vec::new()));
         let current_path = Arc::new(Mutex::new(String::new()));
 
-        let root_clone = root.clone();
+        let root_clone = root.to_path_buf();
         let target_name = target_name.to_string();
         let found_paths_clone = Arc::clone(&found_paths);
         let current_path_clone = Arc::clone(&current_path);
-        let pb_clone = progress_bar.clone();
 
         // Start progress updater task
         let progress_task = {
