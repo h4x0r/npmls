@@ -159,43 +159,33 @@ react                     18.2.0       ✅ Clean      ─               /Users/d
 4. **Threat Matching**: Compares against cached vulnerability database
 5. **Intelligent Reporting**: Provides actionable security insights
 
-## Platform-Specific Optimizations
+## Vulnerability Database Sources
 
-### Linux
-```bash
-# Uses locate database for instant lookups
-locate -r '/node_modules$'
-```
+The application automatically downloads and maintains vulnerability data from multiple authoritative sources:
 
-### macOS  
-```bash
-# Leverages Spotlight for fast searches
-mdfind 'kMDItemFSName == "node_modules" && kMDItemContentType == "public.folder"'
-```
+### Primary Sources
+- **[GitHub Advisory Database](https://github.com/github/advisory-database)**: Official GitHub security advisories for npm packages
+  - Comprehensive vulnerability database with CVE mappings
+  - Regularly updated by security researchers and maintainers
+  - Includes severity scores, affected versions, and remediation guidance
+  
+- **[npm Security Advisories](https://www.npmjs.com/advisories)**: Official npm security team findings
+  - Direct from npm package maintainers and security team
+  - Real-time threat intelligence for published packages
 
-### Windows
-```powershell
-# PowerShell MFT scanning across all drives
-Get-ChildItem -Path 'C:\' -Name 'node_modules' -Directory -Recurse
-```
+### Coverage Includes
+- **Recent Supply Chain Attacks**: 
+  - September 2025: Qix account compromise affecting chalk, debug, color packages
+  - August 2025: Nx build system packages with credential theft malware
+- **Historical Threats**: event-stream, eslint-scope, and other documented attacks
+- **CVE Database**: Known Common Vulnerabilities and Exposures
+- **Malicious Package Detection**: Packages with confirmed malware, backdoors, or cryptocurrency miners
 
-### Built-in High-Performance Scanner
-```rust
-// Parallel multi-threaded filesystem traversal
-// - Respects .gitignore for performance
-// - Intelligent directory skipping 
-// - Platform-specific search roots
-// - Multi-root parallel scanning
-// - Smart depth limits and heuristics
-```
-
-## Threat Intelligence
-
-The application includes an up-to-date database of malicious npm packages from:
-
-- **September 2025**: Qix account compromise affecting chalk, debug, color packages
-- **August 2025**: Nx build system packages with credential theft malware
-- **Historical attacks**: event-stream, eslint-scope, and other known threats
+### Database Updates
+- **Automatic**: Downloads latest data on first run and when cache is >24 hours old
+- **Manual**: Use `--update-db` flag to force immediate update
+- **Offline Mode**: Use `--offline` to rely on built-in database only
+- **Cache Location**: Stored in system cache directory for optimal performance
 
 ## Author & Contact
 
