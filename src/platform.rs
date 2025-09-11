@@ -1,4 +1,6 @@
-use anyhow::{Context, Result};
+#[cfg(not(target_os = "windows"))]
+use anyhow::Context;
+use anyhow::Result;
 use std::path::{Path, PathBuf};
 use tokio::process::Command as TokioCommand;
 
@@ -261,6 +263,7 @@ impl PlatformScanner {
     }
 
     // Fallback method using built-in fast filesystem scanner (fd algorithm implementation)
+    #[allow(dead_code)]
     async fn fallback_find() -> Result<Vec<PathBuf>> {
         println!("⚡ Using built-in ultra-fast filesystem scanner...");
 
@@ -275,6 +278,7 @@ impl PlatformScanner {
     }
 
     // Get intelligent search roots based on the platform
+    #[allow(dead_code)]
     fn get_search_roots() -> Vec<PathBuf> {
         let mut roots = Vec::new();
 
@@ -321,6 +325,7 @@ impl PlatformScanner {
     }
 
     // High-performance parallel directory scanner implementing fd-like algorithm
+    #[allow(dead_code)]
     async fn fast_directory_scan(
         roots: &[PathBuf],
         target_name: &str,
@@ -429,6 +434,7 @@ impl PlatformScanner {
     }
 
     // Heuristic to determine if a directory might contain npm projects
+    #[allow(dead_code)]
     fn might_contain_npm_projects(path: &Path) -> bool {
         // Check for common indicators that suggest npm projects might be present
         let indicators = [
