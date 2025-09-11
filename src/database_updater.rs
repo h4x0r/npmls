@@ -44,7 +44,7 @@ impl DatabaseUpdater {
         fs::create_dir_all(&cache_dir).context("Failed to create cache directory")?;
 
         let client = Client::builder()
-            .user_agent("npmls/0.3.0 (security-scanner)")
+            .user_agent("npmls/0.4.0 (security-scanner)")
             .timeout(Duration::from_secs(300)) // Match download timeout
             .build()?;
 
