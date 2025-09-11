@@ -106,13 +106,14 @@ impl PlatformScanner {
 
     #[cfg(target_os = "windows")]
     async fn windows_mft_scan() -> Result<Vec<PathBuf>> {
-        println!("🪟 Using Windows MFT scanning for fast directory enumeration...");
+        println!("🪟 Using Windows MFT (Master File Table) scanning for ultra-fast directory enumeration...");
 
         // Get all drives
         let drives = Self::get_windows_drives()?;
         let mut all_paths = Vec::new();
 
         for drive in drives {
+            println!("   Scanning drive {} with MFT lookup...", drive);
             let paths = Self::scan_drive_for_node_modules(&drive).await?;
             all_paths.extend(paths);
         }
@@ -150,7 +151,68 @@ impl PlatformScanner {
 
     #[cfg(target_os = "windows")]
     async fn scan_drive_for_node_modules(drive: &str) -> Result<Vec<PathBuf>> {
-        // Use PowerShell for fast directory enumeration
+        // Try MFT scanning first for maximum performance
+        match Self::mft_scan_drive(drive).await {
+            Ok(paths) => Ok(paths),
+            Err(_) => {
+                // Fallback to PowerShell if MFT fails
+                Self::powershell_scan_drive(drive).await
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    async fn mft_scan_drive(drive: &str) -> Result<Vec<PathBuf>> {
+        use ntfs_reader::{Volume, Mft, FileInfo};
+        use std::sync::{Arc, Mutex};
+
+        let paths = Arc::new(Mutex::new(Vec::new()));
+        let drive_letter = drive.chars().next().unwrap();
+        let volume_path = format!("\\\\.\\{}:", drive_letter);
+
+        tokio::task::spawn_blocking({
+            let paths = Arc::clone(&paths);
+            move || -> Result<()> {
+                let volume = Volume::new(&volume_path)
+                    .map_err(|e| anyhow::anyhow!("Failed to open volume {}: {}", volume_path, e))?;
+                
+                let mft = Mft::new(volume)
+                    .map_err(|e| anyhow::anyhow!("Failed to read MFT: {}", e))?;
+
+                mft.iterate_files(|file| {
+                    let info = FileInfo::new(&mft, file);
+                    
+                    // Check if this is a directory named "node_modules"
+                    if info.is_directory() {
+                        if let Some(name) = info.name() {
+                            if name == "node_modules" {
+                                if let Some(path_str) = info.path() {
+                                    let full_path = PathBuf::from(format!("{}\\{}", drive.trim_end_matches('\\'), path_str.trim_start_matches('\\')));
+                                    if full_path.exists() {
+                                        if let Ok(mut locked_paths) = paths.lock() {
+                                            locked_paths.push(full_path);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                Ok(())
+            }
+        }).await??;
+
+        let result = paths.lock()
+            .map_err(|_| anyhow::anyhow!("Failed to access MFT scan results"))?
+            .clone();
+
+        Ok(result)
+    }
+
+    #[cfg(target_os = "windows")]
+    async fn powershell_scan_drive(drive: &str) -> Result<Vec<PathBuf>> {
+        // Use PowerShell for directory enumeration (fallback)
         let output = TokioCommand::new("powershell")
             .arg("-Command")
             .arg(format!(

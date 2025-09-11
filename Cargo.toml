@@ -1,6 +1,6 @@
 [package]
 name = "npmls"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "Fast cross-platform scanner for npm modules and malicious packages"
 authors = ["Albert Hui <albert@securityronin.com>"]
@@ -62,6 +62,7 @@ zip = "0.6"
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["fileapi", "winnt", "processthreadsapi"] }
 ntapi = "0.4"
+ntfs-reader = "0.3"
 
 # macOS/Linux specific dependencies  
 [target.'cfg(not(windows))'.dependencies]
