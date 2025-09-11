@@ -345,7 +345,6 @@ impl PlatformScanner {
 
         // Use the fast fd algorithm for a specific drive
         let drive_root = PathBuf::from(drive);
-        let search_roots = vec![drive_root];
 
         // Create a spinner to show progress during fd scan
         let pb = ProgressBar::new_spinner();
@@ -356,23 +355,143 @@ impl PlatformScanner {
         );
         pb.set_message(format!("filesystem on {}", drive));
 
-        // Start the spinner
-        let pb_clone = pb.clone();
-        let scan_task = tokio::spawn(async move {
-            while !pb_clone.is_finished() {
-                pb_clone.tick();
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            }
-        });
-
-        // Use our built-in parallel fd-like scanner with a reasonable depth limit
-        let result = Self::fast_directory_scan(&search_roots, "node_modules", 15).await;
+        // Use our built-in parallel fd-like scanner with progress reporting
+        let result =
+            Self::fast_directory_scan_with_progress(&drive_root, "node_modules", 15, &pb).await;
 
         // Stop the spinner
         pb.finish_and_clear();
-        scan_task.abort();
 
         result
+    }
+
+    // Windows-specific fd scanner with progress reporting
+    #[cfg(target_os = "windows")]
+    async fn fast_directory_scan_with_progress(
+        root: &PathBuf,
+        target_name: &str,
+        max_depth: usize,
+        progress_bar: &indicatif::ProgressBar,
+    ) -> Result<Vec<PathBuf>> {
+        use ignore::WalkBuilder;
+        use std::sync::{Arc, Mutex};
+
+        let found_paths = Arc::new(Mutex::new(Vec::new()));
+        let current_path = Arc::new(Mutex::new(String::new()));
+
+        let root_clone = root.clone();
+        let target_name = target_name.to_string();
+        let found_paths_clone = Arc::clone(&found_paths);
+        let current_path_clone = Arc::clone(&current_path);
+        let pb_clone = progress_bar.clone();
+
+        // Start progress updater task
+        let progress_task = {
+            let current_path = Arc::clone(&current_path);
+            let pb = progress_bar.clone();
+            tokio::spawn(async move {
+                while !pb.is_finished() {
+                    let current = {
+                        let path_lock = current_path.lock().unwrap();
+                        path_lock.clone()
+                    };
+                    if !current.is_empty() {
+                        // Show just the last 2 path components for brevity
+                        let path_parts: Vec<&str> = current.split('\\').collect();
+                        let display_path = if path_parts.len() > 2 {
+                            format!(
+                                "...\\{}\\{}",
+                                path_parts[path_parts.len() - 2],
+                                path_parts[path_parts.len() - 1]
+                            )
+                        } else {
+                            current
+                        };
+                        pb.set_message(display_path);
+                    }
+                    pb.tick();
+                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                }
+            })
+        };
+
+        let result = tokio::task::spawn_blocking(move || -> Result<Vec<PathBuf>> {
+            // Create high-performance walker
+            let mut builder = WalkBuilder::new(&root_clone);
+            builder
+                .max_depth(Some(max_depth))
+                .follow_links(false) // Don't follow symlinks to avoid infinite loops
+                .hidden(false)
+                .parents(false)
+                .ignore(true)
+                .git_ignore(true)
+                .git_exclude(true)
+                .threads(num_cpus::get().min(4)); // Maintain parallelism
+
+            let walker = builder.build_parallel();
+
+            walker.run(|| {
+                let target_name = target_name.clone();
+                let found_paths = Arc::clone(&found_paths_clone);
+                let current_path = Arc::clone(&current_path_clone);
+
+                Box::new(move |entry| {
+                    use ignore::WalkState;
+
+                    match entry {
+                        Ok(entry) => {
+                            let path = entry.path();
+
+                            // Update current path for progress display
+                            if path.is_dir() {
+                                if let Ok(mut current) = current_path.lock() {
+                                    *current = path.to_string_lossy().to_string();
+                                }
+                            }
+
+                            // Check if this is a directory named "node_modules"
+                            if path.is_dir() {
+                                if let Some(name) = path.file_name() {
+                                    if name == target_name.as_str() {
+                                        if let Ok(mut paths) = found_paths.lock() {
+                                            paths.push(path.to_path_buf());
+                                        }
+                                        // Skip traversing into node_modules
+                                        return WalkState::Skip;
+                                    }
+                                }
+                            }
+
+                            // Performance optimization: skip certain directories
+                            if path.is_dir() {
+                                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                                    match name {
+                                        ".git" | ".svn" | ".hg" | ".bzr" => return WalkState::Skip,
+                                        "target" | "build" | "dist" | "out" => {
+                                            if !Self::might_contain_npm_projects(path) {
+                                                return WalkState::Skip;
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
+
+                            WalkState::Continue
+                        }
+                        Err(_) => WalkState::Continue, // Skip inaccessible entries
+                    }
+                })
+            });
+
+            Ok(found_paths_clone.lock().unwrap().clone())
+        })
+        .await??;
+
+        // Stop progress task
+        progress_task.abort();
+
+        Ok(result)
     }
 
     #[cfg(target_os = "windows")]
