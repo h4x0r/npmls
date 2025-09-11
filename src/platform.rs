@@ -171,7 +171,9 @@ impl PlatformScanner {
             Ok(paths) => {
                 // If MFT finds nothing, try fd algorithm as fallback
                 if paths.is_empty() {
-                    println!("⚠️  MFT found no results, falling back to fast filesystem scanner...");
+                    println!(
+                        "⚠️  MFT found no results, falling back to fast filesystem scanner..."
+                    );
                     Self::windows_fd_fallback(drive).await
                 } else {
                     Ok(paths)
@@ -212,10 +214,11 @@ impl PlatformScanner {
                     Err(e) => {
                         let error_str = e.to_string();
                         // Check for common elevation-related errors
-                        if error_str.contains("elevation") 
+                        if error_str.contains("elevation")
                             || error_str.contains("Access is denied")
                             || error_str.contains("permission")
-                            || error_str.contains("privilege") {
+                            || error_str.contains("privilege")
+                        {
                             false
                         } else {
                             // For other errors, we might still want to try
@@ -224,7 +227,9 @@ impl PlatformScanner {
                     }
                 }
             }
-        }).await.unwrap_or(false);
+        })
+        .await
+        .unwrap_or(false);
 
         if !can_access_volume {
             return Err(anyhow::anyhow!("elevation error"));
@@ -337,7 +342,7 @@ impl PlatformScanner {
         // Use the fast fd algorithm for a specific drive
         let drive_root = PathBuf::from(drive);
         let search_roots = vec![drive_root];
-        
+
         // Use our built-in parallel fd-like scanner with a reasonable depth limit
         Self::fast_directory_scan(&search_roots, "node_modules", 15).await
     }
