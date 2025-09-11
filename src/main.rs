@@ -70,7 +70,9 @@ async fn main() -> anyhow::Result<()> {
 
     println!(
         "{} {}",
-        "🔍 NPM Security Scanner v0.1.0".bright_cyan().bold(),
+        format!("🔍 NPM Security Scanner v{}", env!("CARGO_PKG_VERSION"))
+            .bright_cyan()
+            .bold(),
         "- By Albert Hui <albert@securityronin.com>".dimmed()
     );
     println!(

@@ -44,8 +44,8 @@ impl DatabaseUpdater {
         fs::create_dir_all(&cache_dir).context("Failed to create cache directory")?;
 
         let client = Client::builder()
-            .user_agent("npmls/0.1.0 (security-scanner)")
-            .timeout(Duration::from_secs(30))
+            .user_agent("npmls/0.3.0 (security-scanner)")
+            .timeout(Duration::from_secs(300)) // Match download timeout
             .build()?;
 
         Ok(Self { client, cache_dir })
@@ -377,15 +377,10 @@ impl DatabaseUpdater {
 
     #[allow(clippy::future_not_send)]
     async fn download_github_advisory_database(&self) -> Result<VulnerabilityDatabase> {
-        println!(
-            "{}",
-            "⬇️  Downloading GitHub Advisory Database...".bright_blue()
-        );
-
         let download_url = "https://github.com/github/advisory-database/archive/main.zip";
 
         let response = timeout(
-            Duration::from_secs(120),
+            Duration::from_secs(300), // 5 minutes for large GitHub repo
             self.client.get(download_url).send(),
         )
         .await
@@ -399,7 +394,49 @@ impl DatabaseUpdater {
             ));
         }
 
-        let zip_data = response.bytes().await?.to_vec();
+        let content_length = response.content_length();
+
+        // Set up progress bar for download
+        let pb = if let Some(len) = content_length {
+            let pb = ProgressBar::new(len);
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("\r📥 [{bar:20.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+                    .unwrap()
+                    .progress_chars("#>-"),
+            );
+            pb
+        } else {
+            // Unknown size - use spinner
+            let pb = ProgressBar::new_spinner();
+            pb.set_style(
+                ProgressStyle::default_spinner()
+                    .template("\r📥 {spinner} {bytes} downloaded...")
+                    .unwrap(),
+            );
+            pb
+        };
+
+        // Download with progress tracking
+        let mut zip_data = Vec::new();
+        let mut stream = response.bytes_stream();
+
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.context("Error reading GitHub download stream")?;
+            zip_data.extend_from_slice(&chunk);
+
+            if content_length.is_some() {
+                pb.set_position(zip_data.len() as u64);
+            } else {
+                pb.set_position(zip_data.len() as u64);
+                pb.tick();
+            }
+        }
+
+        pb.finish_and_clear();
+        #[allow(clippy::cast_precision_loss)]
+        let size_mb = zip_data.len() as f64 / 1_000_000.0;
+        println!("📦 Downloaded {size_mb:.1}MB from GitHub Advisory database");
         println!("🔄 Parsing GitHub Advisory database...");
 
         let database = self.parse_github_zip_data(&zip_data).await?;
@@ -416,21 +453,19 @@ impl DatabaseUpdater {
         let mut all_packages: HashMap<String, Vec<MaliciousPackage>> = HashMap::new();
         let mut processed_count = 0;
 
-        // Progress bar for GitHub advisories
-        let npm_files: Vec<_> = (0..archive.len())
+        // Get all GitHub advisory JSON files (ecosystem filtering happens during parsing)
+        let advisory_files: Vec<_> = (0..archive.len())
             .filter(|&i| {
                 if let Ok(file) = archive.by_index(i) {
                     let path = file.name();
-                    path.contains("/advisories/github-reviewed/")
-                        && path.ends_with(".json")
-                        && path.contains("/npm/")
+                    path.contains("advisories/github-reviewed/") && path.ends_with(".json")
                 } else {
                     false
                 }
             })
             .collect();
 
-        let pb = ProgressBar::new(npm_files.len() as u64);
+        let pb = ProgressBar::new(advisory_files.len() as u64);
         pb.set_style(
             ProgressStyle::default_bar()
                 .template("{bar:40.cyan/blue} {pos:>7}/{len:7} GitHub advisories parsed")
@@ -438,7 +473,7 @@ impl DatabaseUpdater {
                 .progress_chars("##-"),
         );
 
-        for (idx, &i) in npm_files.iter().enumerate() {
+        for (idx, &i) in advisory_files.iter().enumerate() {
             let file = archive.by_index(i)?;
 
             if let Ok(advisory) = serde_json::from_reader::<_, GitHubAdvisory>(file) {

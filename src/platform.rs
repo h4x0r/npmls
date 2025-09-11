@@ -163,7 +163,7 @@ impl PlatformScanner {
 
     #[cfg(target_os = "windows")]
     async fn mft_scan_drive(drive: &str) -> Result<Vec<PathBuf>> {
-        use ntfs_reader::{Volume, Mft, FileInfo};
+        use ntfs_reader::{FileInfo, Mft, Volume};
         use std::sync::{Arc, Mutex};
 
         let paths = Arc::new(Mutex::new(Vec::new()));
@@ -175,19 +175,23 @@ impl PlatformScanner {
             move || -> Result<()> {
                 let volume = Volume::new(&volume_path)
                     .map_err(|e| anyhow::anyhow!("Failed to open volume {}: {}", volume_path, e))?;
-                
-                let mft = Mft::new(volume)
-                    .map_err(|e| anyhow::anyhow!("Failed to read MFT: {}", e))?;
+
+                let mft =
+                    Mft::new(volume).map_err(|e| anyhow::anyhow!("Failed to read MFT: {}", e))?;
 
                 mft.iterate_files(|file| {
                     let info = FileInfo::new(&mft, file);
-                    
+
                     // Check if this is a directory named "node_modules"
                     if info.is_directory() {
                         if let Some(name) = info.name() {
                             if name == "node_modules" {
                                 if let Some(path_str) = info.path() {
-                                    let full_path = PathBuf::from(format!("{}\\{}", drive.trim_end_matches('\\'), path_str.trim_start_matches('\\')));
+                                    let full_path = PathBuf::from(format!(
+                                        "{}\\{}",
+                                        drive.trim_end_matches('\\'),
+                                        path_str.trim_start_matches('\\')
+                                    ));
                                     if full_path.exists() {
                                         if let Ok(mut locked_paths) = paths.lock() {
                                             locked_paths.push(full_path);
@@ -201,9 +205,11 @@ impl PlatformScanner {
 
                 Ok(())
             }
-        }).await??;
+        })
+        .await??;
 
-        let result = paths.lock()
+        let result = paths
+            .lock()
             .map_err(|_| anyhow::anyhow!("Failed to access MFT scan results"))?
             .clone();
 
