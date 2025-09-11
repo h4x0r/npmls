@@ -162,7 +162,9 @@ impl PlatformScanner {
     }
 
     #[cfg(target_os = "windows")]
+    #[allow(clippy::manual_map)]
     async fn mft_scan_drive(drive: &str) -> Result<Vec<PathBuf>> {
+        #[allow(unused_imports)]
         use ntfs_reader::{FileInfo, Mft, Volume};
         use std::sync::{Arc, Mutex};
 
@@ -180,6 +182,7 @@ impl PlatformScanner {
                     Mft::new(volume).map_err(|e| anyhow::anyhow!("Failed to read MFT: {}", e))?;
 
                 mft.iterate_files(|file| {
+                    #[allow(unused_variables)]
                     let info = FileInfo::new(&mft, file);
 
                     // Check if this is a directory named "node_modules"
