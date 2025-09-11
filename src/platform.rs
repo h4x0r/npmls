@@ -187,19 +187,16 @@ impl PlatformScanner {
 
                     // Check if this is a directory named "node_modules"
                     if info.is_directory {
-                        if let Some(name) = &info.name {
-                            if name == "node_modules" {
-                                if let Some(path_str) = &info.path {
-                                    let full_path = PathBuf::from(format!(
-                                        "{}\\{}",
-                                        drive.trim_end_matches('\\'),
-                                        path_str.trim_start_matches('\\')
-                                    ));
-                                    if full_path.exists() {
-                                        if let Ok(mut locked_paths) = paths.lock() {
-                                            locked_paths.push(full_path);
-                                        }
-                                    }
+                        if info.name == "node_modules" {
+                            let path_str = info.path.to_string_lossy();
+                            let full_path = PathBuf::from(format!(
+                                "{}\\{}",
+                                drive.trim_end_matches('\\'),
+                                path_str.trim_start_matches('\\')
+                            ));
+                            if full_path.exists() {
+                                if let Ok(mut locked_paths) = paths.lock() {
+                                    locked_paths.push(full_path);
                                 }
                             }
                         }
