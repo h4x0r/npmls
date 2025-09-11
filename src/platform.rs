@@ -186,10 +186,10 @@ impl PlatformScanner {
                     let info = FileInfo::new(&mft, file);
 
                     // Check if this is a directory named "node_modules"
-                    if info.is_directory() {
-                        if let Some(name) = info.name() {
+                    if info.is_directory {
+                        if let Some(name) = &info.name {
                             if name == "node_modules" {
-                                if let Some(path_str) = info.path() {
+                                if let Some(path_str) = &info.path {
                                     let full_path = PathBuf::from(format!(
                                         "{}\\{}",
                                         drive.trim_end_matches('\\'),
