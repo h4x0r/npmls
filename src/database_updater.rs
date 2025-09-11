@@ -56,8 +56,6 @@ impl DatabaseUpdater {
         &self,
         _package_names: &[String],
     ) -> Result<VulnerabilityDatabase> {
-        println!("{}", "🔄 Updating vulnerability database...".bright_blue());
-
         // Download from both OSV and GitHub Advisory databases
         let osv_db = self.download_complete_osv_database().await?;
         let github_db = self.download_github_advisory_database().await?;

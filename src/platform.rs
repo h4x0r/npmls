@@ -341,12 +341,38 @@ impl PlatformScanner {
 
     #[cfg(target_os = "windows")]
     async fn windows_fd_fallback(drive: &str) -> Result<Vec<PathBuf>> {
+        use indicatif::{ProgressBar, ProgressStyle};
+
         // Use the fast fd algorithm for a specific drive
         let drive_root = PathBuf::from(drive);
         let search_roots = vec![drive_root];
 
+        // Create a spinner to show progress during fd scan
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(
+            ProgressStyle::default_spinner()
+                .template("\r    {spinner} Scanning {msg}...")
+                .unwrap(),
+        );
+        pb.set_message(format!("filesystem on {}", drive));
+
+        // Start the spinner
+        let pb_clone = pb.clone();
+        let scan_task = tokio::spawn(async move {
+            while !pb_clone.is_finished() {
+                pb_clone.tick();
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+        });
+
         // Use our built-in parallel fd-like scanner with a reasonable depth limit
-        Self::fast_directory_scan(&search_roots, "node_modules", 15).await
+        let result = Self::fast_directory_scan(&search_roots, "node_modules", 15).await;
+
+        // Stop the spinner
+        pb.finish_and_clear();
+        scan_task.abort();
+
+        result
     }
 
     #[cfg(target_os = "windows")]
