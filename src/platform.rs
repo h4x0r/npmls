@@ -169,22 +169,21 @@ impl PlatformScanner {
         // Try MFT scanning first for maximum performance
         match Self::mft_scan_drive(drive).await {
             Ok(paths) => {
-                println!("🔧 MFT scan of {} found {} paths", drive, paths.len());
-                // If MFT finds nothing, try PowerShell as fallback
+                // If MFT finds nothing, try fd algorithm as fallback
                 if paths.is_empty() {
-                    println!("⚠️  MFT found no results, falling back to PowerShell...");
-                    Self::powershell_scan_drive(drive).await
+                    println!("⚠️  MFT found no results, falling back to fast filesystem scanner...");
+                    Self::windows_fd_fallback(drive).await
                 } else {
                     Ok(paths)
                 }
             }
             Err(e) => {
                 println!(
-                    "⚠️  MFT scan failed for {}: {}, falling back to PowerShell...",
+                    "⚠️  MFT scan failed for {}: {}, falling back to fast filesystem scanner...",
                     drive, e
                 );
-                // Fallback to PowerShell if MFT fails
-                Self::powershell_scan_drive(drive).await
+                // Fallback to fd algorithm if MFT fails (much faster than PowerShell)
+                Self::windows_fd_fallback(drive).await
             }
         }
     }
@@ -202,6 +201,34 @@ impl PlatformScanner {
         let drive_letter = drive.chars().next().unwrap();
         let volume_path = format!("\\\\.\\{}:", drive_letter);
         let drive_owned = drive.to_string(); // Clone drive for move into closure
+
+        // Check if we can access the volume without elevation first
+        // Try to open the volume to see if we have the required privileges
+        let can_access_volume = tokio::task::spawn_blocking({
+            let volume_path = volume_path.clone();
+            move || -> bool {
+                match Volume::new(&volume_path) {
+                    Ok(_) => true,
+                    Err(e) => {
+                        let error_str = e.to_string();
+                        // Check for common elevation-related errors
+                        if error_str.contains("elevation") 
+                            || error_str.contains("Access is denied")
+                            || error_str.contains("permission")
+                            || error_str.contains("privilege") {
+                            false
+                        } else {
+                            // For other errors, we might still want to try
+                            true
+                        }
+                    }
+                }
+            }
+        }).await.unwrap_or(false);
+
+        if !can_access_volume {
+            return Err(anyhow::anyhow!("elevation error"));
+        }
 
         // Create a spinner for MFT iteration
         let pb = ProgressBar::new_spinner();
@@ -227,7 +254,7 @@ impl PlatformScanner {
             }
         });
 
-        let result = tokio::task::spawn_blocking({
+        tokio::task::spawn_blocking({
             let paths = Arc::clone(&paths);
             let files_processed = Arc::clone(&files_processed);
             move || -> Result<()> {
@@ -237,28 +264,15 @@ impl PlatformScanner {
                 let mft =
                     Mft::new(volume).map_err(|e| anyhow::anyhow!("Failed to read MFT: {}", e))?;
 
-                let mut node_modules_found = 0;
-                let mut debug_paths = Vec::new();
-
                 mft.iterate_files(|file| {
                     #[allow(unused_variables)]
                     let info = FileInfo::new(&mft, file);
 
                     // Update counter
-                    let count = files_processed.fetch_add(1, Ordering::Relaxed);
-
-                    // Debug: Log first few directory entries
-                    if count < 10 && info.is_directory {
-                        debug_paths.push(format!(
-                            "Debug: {} - {}",
-                            info.name,
-                            info.path.to_string_lossy()
-                        ));
-                    }
+                    files_processed.fetch_add(1, Ordering::Relaxed);
 
                     // Check if this is a directory named "node_modules"
                     if info.is_directory && info.name == "node_modules" {
-                        node_modules_found += 1;
                         let path_str = info.path.to_string_lossy();
                         let full_path = PathBuf::from(format!(
                             "{}{}",
@@ -270,31 +284,13 @@ impl PlatformScanner {
                             }
                         ));
 
-                        println!(
-                            "🔧 Found node_modules at: {} -> {}",
-                            path_str,
-                            full_path.display()
-                        );
-
                         if full_path.exists() {
-                            println!("✅ Path exists, adding to results");
                             if let Ok(mut locked_paths) = paths.lock() {
                                 locked_paths.push(full_path);
                             }
-                        } else {
-                            println!("❌ Path does not exist: {}", full_path.display());
                         }
                     }
                 });
-
-                // Debug output
-                println!(
-                    "🔧 MFT scan complete for {}: {} total node_modules found",
-                    drive_owned, node_modules_found
-                );
-                for debug_path in debug_paths {
-                    println!("🔧 {}", debug_path);
-                }
 
                 Ok(())
             }
@@ -303,12 +299,10 @@ impl PlatformScanner {
 
         pb.finish_and_clear();
 
-        let result = paths
+        Ok(paths
             .lock()
             .map_err(|_| anyhow::anyhow!("Failed to access MFT scan results"))?
-            .clone();
-
-        Ok(result)
+            .clone())
     }
 
     #[cfg(target_os = "windows")]
@@ -336,6 +330,16 @@ impl PlatformScanner {
             .collect();
 
         Ok(paths)
+    }
+
+    #[cfg(target_os = "windows")]
+    async fn windows_fd_fallback(drive: &str) -> Result<Vec<PathBuf>> {
+        // Use the fast fd algorithm for a specific drive
+        let drive_root = PathBuf::from(drive);
+        let search_roots = vec![drive_root];
+        
+        // Use our built-in parallel fd-like scanner with a reasonable depth limit
+        Self::fast_directory_scan(&search_roots, "node_modules", 15).await
     }
 
     #[cfg(target_os = "windows")]
@@ -419,7 +423,6 @@ impl PlatformScanner {
     }
 
     // High-performance parallel directory scanner implementing fd-like algorithm
-    #[allow(dead_code)]
     async fn fast_directory_scan(
         roots: &[PathBuf],
         target_name: &str,
