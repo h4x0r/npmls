@@ -94,8 +94,11 @@ jobs:
   create-checksums:
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/')
     steps:
+    - name: Checkout code
+      uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+
     - name: Download all artifacts
       uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
       
@@ -106,15 +109,26 @@ jobs:
         echo "Date: $(date -u)" >> CHECKSUMS.txt
         echo "" >> CHECKSUMS.txt
         
-        for file in npmls-*; do
+        # Find all zip files (including in subdirectories from artifacts)
+        find . -name "npmls-*.zip" -type f | while read file; do
           if [ -f "$file" ]; then
-            echo "## $file" >> CHECKSUMS.txt
+            echo "## $(basename $file)" >> CHECKSUMS.txt
             sha256sum "$file" >> CHECKSUMS.txt
             echo "" >> CHECKSUMS.txt
           fi
         done
         
-    - name: Upload checksums
+    - name: Create GitHub release and upload checksums
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: gh release upload ${{ github.ref_name }} CHECKSUMS.txt
+      run: |
+        # Create release if it doesn't exist (for tag pushes)
+        if ! gh release view ${{ github.ref_name }} >/dev/null 2>&1; then
+          gh release create ${{ github.ref_name }} \
+            --title "Release ${{ github.ref_name }}" \
+            --notes "Automated release for ${{ github.ref_name }}"
+        fi
+        
+        # Upload checksums and any zip files
+        gh release upload ${{ github.ref_name }} CHECKSUMS.txt
+        find . -name "npmls-*.zip" -type f -exec gh release upload ${{ github.ref_name }} {} \;
