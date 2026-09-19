@@ -48,7 +48,7 @@ cargo install npmls
 ### From Source
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/npmls.git
+git clone https://github.com/h4x0r/npmls.git
 cd npmls
 
 # Build the application
